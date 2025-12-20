@@ -7,6 +7,8 @@ set(SOURCES
     src/http.c
 )
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/public DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+    ${CMAKE_CURRENT_SOURCE_DIR}/public
+    ${CMAKE_CURRENT_BINARY_DIR}/public)
 
 add_executable(httpserver ${SOURCES})

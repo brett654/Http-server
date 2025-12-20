@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 #define METHOD_LEN 9
 #define PATH_LEN 257
@@ -38,6 +39,11 @@ typedef struct {
     size_t response_size;
     char* response_buffer;
 } HttpResponse;
+
+typedef struct {
+    const char* extension;
+    const char* mime_type;
+} MimeMap;
 
 HttpResult http_handle_request(const char* buf, HttpResponse* http_response);
 HttpResult http_serialize(HttpResponse* http_response);

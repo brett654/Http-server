@@ -48,6 +48,21 @@ HttpResult http_parse_request(const char* buf, HttpRequest* http_request) {
 }
 
 HttpResult http_get_mime_type(const char* file_path, HttpResponse* http_response) {
+    static MimeMap mime_types[] = {
+        {"html", "text/html"},
+        {"htm",  "text/html"},
+        {"css",  "text/css"},
+        {"js",   "application/javascript"},
+        {"png",  "image/png"},
+        {"jpg",  "image/jpeg"},
+        {"jpeg", "image/jpeg"},
+        {"gif",  "image/gif"},
+        {"json", "application/json"},
+        {"txt",  "text/plain"},
+    };
+
+    const size_t mime_types_count = sizeof(mime_types) / sizeof(MimeMap);
+
     char* dot = strrchr(file_path, '.');
     if (!dot) {
         strcpy(http_response->mime_type, "text/plain");
@@ -56,12 +71,14 @@ HttpResult http_get_mime_type(const char* file_path, HttpResponse* http_response
 
     char* ext = dot + 1;
     
-    if (strcmp(ext, "html") == 0) {
-        strcpy(http_response->mime_type, "text/html");
-    } else {
-        strcpy(http_response->mime_type, "text/plain");
+    for (int i = 0; i < mime_types_count; i++) {
+        if (strcmp(ext, mime_types[i].extension) == 0) {
+            strncpy(http_response->mime_type, mime_types[i].mime_type, MIME_TYPE_LEN);
+            return HTTP_OK;
+        }
     }
 
+    strncpy(http_response->mime_type, "application/octet-stream", MIME_TYPE_LEN);
     return HTTP_OK;
 }
 
@@ -75,7 +92,7 @@ HttpResult http_handle_file_request(char* requested_path, HttpResponse* http_res
     }
 
     fseek(file, 0, SEEK_END);
-    long fsize = ftell(file);
+    size_t fsize = ftell(file);
     fseek(file, 0, SEEK_SET);
     
     http_response->content_length = fsize;
@@ -149,7 +166,7 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
 
     http_result = http_parse_request(buf, &http_request);
     if (http_result != HTTP_OK) goto handle_error;
-    printf("Parsed request:\n%s %s %s\n", http_request.method, http_request.path, http_request.version);
+    printf("%s %s %s\n", http_request.method, http_request.path, http_request.version);
     
     char *file_to_serve = http_request.path;
     if (strcmp(file_to_serve, "/") == 0) {
@@ -183,7 +200,7 @@ HttpResult http_serialize(HttpResponse* http_response) {
     int header_len = snprintf(header_buf, sizeof(header_buf),
         "HTTP/1.1 %d %s\r\n"
         "Content-Type: %s\r\n"
-        "Content-Length: %ld\r\n"
+        "Content-Length: %zu\r\n"
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
         "Connection: close\r\n\r\n",
@@ -198,7 +215,7 @@ HttpResult http_serialize(HttpResponse* http_response) {
     }
 
     http_response->response_size = header_len + http_response->content_length;
-    http_response->response_buffer = malloc(http_response->response_size);
+    http_response->response_buffer = malloc(http_response->response_size + 1); // safety byte
 
     if (http_response->response_buffer == NULL) {
         return HTTP_MALLOC_ERR;
