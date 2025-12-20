@@ -177,6 +177,11 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
         file_to_serve = "/index.html";
     }
 
+    http_response->keep_alive = true;
+    if (strstr(buf, "Connection: close") != NULL) {
+        http_response->keep_alive = false;
+    }
+
     http_result = http_get_mime_type(file_to_serve, http_response);
     if (http_result != HTTP_OK) goto handle_error;
 
@@ -200,19 +205,32 @@ handle_error:
 HttpResult http_serialize(HttpResponse* http_response) {
     char header_buf[1024];
 
+    char conn_header[256];
+    if (http_response->keep_alive) {
+        snprintf(conn_header, sizeof(conn_header),
+            "Connection: keep-alive\r\n"
+            "Keep-Alive: timeout=%d, max=100\r\n",
+            TIMEOUT
+        );
+    } else {
+        snprintf(conn_header, sizeof(conn_header),
+            "Connection: close\r\n"
+        );
+    }
+
     int header_len = snprintf(header_buf, sizeof(header_buf),
         "HTTP/1.1 %d %s\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
-        "Connection: keep-alive\r\n"
-        "Keep-Alive: timeout=%d, max=100\r\n\r\n",
+        "%s"
+        "\r\n",
         http_response->status_code,
         http_response->status_message,
         http_response->mime_type,
         http_response->content_length,
-        TIMEOUT
+        conn_header
     );
 
     if (header_len < 0 || header_len >= sizeof(header_buf)) {

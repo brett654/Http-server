@@ -4,8 +4,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+//#include <unistd.h>
+//#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <time.h>
 #include <signal.h>
+#include <stdbool.h>
 
 #define PORT "9034"
 #define MAXQUEUE 10
@@ -33,7 +34,6 @@ int main() {
 
     char buf[MAXLiNE];
     int num_bytes;
-    int current_fd;
     int select_result;
 
     NetContext net_ctx;
@@ -65,7 +65,7 @@ int main() {
 
             time_t now = time(NULL);
 
-            for (int i = 0; i < net_ctx.fd_max; i++) {
+            for (int i = 0; i <= net_ctx.fd_max; i++) {
                 if (i == net_ctx.listener || net_ctx.clients[i] == NULL) {
                     continue;
                 }
@@ -79,7 +79,7 @@ int main() {
             continue;
         }
 
-        for (current_fd = 0; current_fd <= net_ctx.fd_max; current_fd++) {
+        for (int current_fd = 0; current_fd <= net_ctx.fd_max; current_fd++) {
             if (!FD_ISSET(current_fd, &net_ctx.read_fds)) {
                 continue;
             }
@@ -93,6 +93,7 @@ int main() {
             }
             // handle data sent from client
             num_bytes = recv(current_fd, buf, sizeof(buf) - 1, 0);
+            //printf("Recv fd: %d\n", current_fd);
 
             switch(num_bytes) {
                 case -1: // Error
@@ -121,6 +122,7 @@ int main() {
                     if (http_result != HTTP_OK) {
                         fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
                     }
+                    //printf("Handle request fd: %d\n", current_fd);
 
                     if (http_serialize(http_response) == HTTP_OK) {
                         if (send(current_fd, http_response->response_buffer, http_response->response_size, 0) == -1) {
@@ -131,7 +133,10 @@ int main() {
                         send(current_fd, fatal, strlen(fatal), 0);
                     }
 
-                    //disconnect_client(current_fd, &net_ctx);
+                    if (!http_response->keep_alive) {
+                        printf("httpserver: Client requested close. Hanging up socket %d\n", current_fd);
+                        disconnect_client(current_fd, &net_ctx);
+                    }
                     http_free_response(http_response);
                     break;
 

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 
 #include "common.h"
@@ -35,6 +36,7 @@ typedef struct {
 typedef struct {
     int status_code;
     char status_message[STATUS_MESSAGE_LEN];
+    bool keep_alive;
     char mime_type[MIME_TYPE_LEN];
     size_t content_length;
     char* body;

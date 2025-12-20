@@ -74,11 +74,14 @@ NetResult handle_new_connection(NetContext* net_ctx) {
 //    c->address = remote_addr;
     c->last_activity = time(NULL);
 
+    if (net_ctx->clients[new_fd] != NULL) {
+        free(net_ctx->clients[new_fd]); 
+    }
     net_ctx->clients[new_fd] = c;
 
     FD_SET(new_fd, &net_ctx->master);
     if (new_fd > net_ctx->fd_max) {
-    net_ctx->fd_max = new_fd;
+        net_ctx->fd_max = new_fd;
     }
     printf("httpserver: new conncetion from %s on socket %d\n",
         inet_ntoa(remote_addr.sin_addr), new_fd);
@@ -86,7 +89,6 @@ NetResult handle_new_connection(NetContext* net_ctx) {
 }
 
 void disconnect_client(int client_fd, NetContext* net_ctx) {
-    close(client_fd);
     FD_CLR(client_fd, &net_ctx->master);
 
     if (net_ctx->clients[client_fd] != NULL) {
@@ -100,6 +102,8 @@ void disconnect_client(int client_fd, NetContext* net_ctx) {
             (net_ctx->fd_max)--;
         }
     }
+
+    close(client_fd);
     printf("httpserver: closed conncetion on socket %d\n\n",
     client_fd);
 }
@@ -122,6 +126,6 @@ const char* net_strerror(NetResult status) {
         case NET_SETSOCKOPT_ERR:  return "Failed to set socket options";
         case NET_ACCEPT_ERR:      return "Failed to accept new connection";
         case NET_MAX_CLIENTS_ERR: return "Max client(1024) reached";
-        default:                 return "Unknown network error";
+        default:                  return "Unknown network error";
     }
 }
