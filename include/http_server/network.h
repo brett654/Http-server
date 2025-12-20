@@ -9,14 +9,22 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <time.h>
 
 #define MAXQUEUE 10
+
+typedef struct {
+//    int fd;
+//    struct sockaddr_in address;
+    time_t last_activity;
+} Client;
 
 typedef struct {
     fd_set master;
     fd_set read_fds; // temp fd list for select()
     int fd_max;
     int listener; // listening socket descriptor
+    Client* clients[FD_SETSIZE];
 } NetContext;
 
 typedef enum {
@@ -25,7 +33,8 @@ typedef enum {
     NET_BIND_ERR,
     NET_LISTEN_ERR,
     NET_ACCEPT_ERR,
-    NET_SETSOCKOPT_ERR
+    NET_SETSOCKOPT_ERR,
+    NET_MAX_CLIENTS_ERR
 } NetResult;
 
 NetResult setup_listener_socket(const char* port, NetContext* net_ctx);

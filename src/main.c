@@ -11,10 +11,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <time.h>
 
 #define PORT "9034"
 #define MAXQUEUE 10
 #define MAXLiNE 4096
+#define TIMEOUT 5
 
 int main() {
     NetResult net_result;
@@ -23,6 +25,7 @@ int main() {
     char buf[MAXLiNE];
     int num_bytes;
     int current_fd;
+    int select_result;
 
     NetContext net_ctx;
     net_init(&net_ctx);
@@ -35,9 +38,32 @@ int main() {
 
     while (1) {
         net_ctx.read_fds = net_ctx.master;
-        if (select(net_ctx.fd_max + 1, &net_ctx.read_fds, NULL, NULL, NULL) == -1) {
+
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+
+        select_result = select(net_ctx.fd_max + 1, &net_ctx.read_fds, NULL, NULL, &timeout);
+        if (select_result == -1) {
             perror("select");
             exit(EXIT_FAILURE);
+        } else if (select_result == 0) {
+            printf("httpserver: idle timeout(5s) - checking for expired connections\n");
+
+            time_t now = time(NULL);
+
+            for (int i = 0; i < net_ctx.fd_max; i++) {
+                if (i == net_ctx.listener || net_ctx.clients[i] == NULL) {
+                    continue;
+                }
+
+                if (now - net_ctx.clients[i]->last_activity >= 5) {
+                    printf("httpserver: Connection expired for socket: %d\n", i);
+                    disconnect_client(i, &net_ctx);
+                }
+            }
+
+            continue;
         }
 
         for (current_fd = 0; current_fd <= net_ctx.fd_max; current_fd++) {
@@ -57,7 +83,11 @@ int main() {
 
             switch(num_bytes) {
                 case -1: // Error
-                    perror("recv");
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        printf("LOG: Request took too long (Client timed out after 5s)\n");
+                    } else {
+                        perror("recv error");
+                    }
                     disconnect_client(current_fd, &net_ctx);
                     break;
                 case 0: // Connection closed
@@ -66,9 +96,13 @@ int main() {
                     break;
                 default: // Got data!
                     HttpResponse* http_response = http_init_response();
+                    Client* c = net_ctx.clients[current_fd];
+
+                    if (c != NULL) {
+                        c->last_activity = time(NULL);
+                    }
 
                     buf[num_bytes] = '\0';
-                    //printf("\nSent from client:\n%s", buf);
 
                     http_result = http_handle_request(buf, http_response);
                     if (http_result != HTTP_OK) {
@@ -84,9 +118,7 @@ int main() {
                         send(current_fd, fatal, strlen(fatal), 0);
                     }
 
-                    disconnect_client(current_fd, &net_ctx);
-                    printf("httpserver: closed conncetion on socket %d\n",
-                    current_fd);
+                    //disconnect_client(current_fd, &net_ctx);
                     http_free_response(http_response);
                     break;
 

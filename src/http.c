@@ -166,17 +166,15 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
 
     http_result = http_parse_request(buf, &http_request);
     if (http_result != HTTP_OK) goto handle_error;
-    printf("%s %s %s\n", http_request.method, http_request.path, http_request.version);
-    
+
+    if (strstr(http_request.path, "..")) {
+        http_result = HTTP_FORBIDDEN;
+        goto handle_error;
+    }
+
     char *file_to_serve = http_request.path;
     if (strcmp(file_to_serve, "/") == 0) {
         file_to_serve = "/index.html";
-    }
-
-    if (strstr(file_to_serve, "..")) {
-        // If the path contains ".." return a 403 Forbidden
-        http_result = HTTP_FORBIDDEN;
-        goto handle_error;
     }
 
     http_result = http_get_mime_type(file_to_serve, http_response);
@@ -186,6 +184,11 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
     if (http_result != HTTP_OK) goto handle_error;
 
     http_status_from_result(http_result, http_response);
+
+    printf("%s %s %s -> %d %s\n", http_request.method, http_request.path, http_request.version,
+        http_response->status_code, http_response->status_message
+    );
+
     return HTTP_OK;
 
 handle_error:
@@ -203,7 +206,8 @@ HttpResult http_serialize(HttpResponse* http_response) {
         "Content-Length: %zu\r\n"
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
-        "Connection: keep-alive\r\n\r\n",
+        "Connection: keep-alive\r\n"
+        "Keep-Alive: timeout=5, max=100\r\n\r\n",
         http_response->status_code,
         http_response->status_message,
         http_response->mime_type,
@@ -215,7 +219,7 @@ HttpResult http_serialize(HttpResponse* http_response) {
     }
 
     http_response->response_size = header_len + http_response->content_length;
-    http_response->response_buffer = malloc(http_response->response_size + 1); // safety byte
+    http_response->response_buffer = malloc(http_response->response_size);
 
     if (http_response->response_buffer == NULL) {
         return HTTP_MALLOC_ERR;
