@@ -68,7 +68,7 @@ int main() {
                     HttpResponse* http_response = http_init_response();
 
                     buf[num_bytes] = '\0';
-                    printf("\nSent from client:\n%s", buf);
+                    //printf("\nSent from client:\n%s", buf);
 
                     http_result = http_handle_request(buf, http_response);
                     if (http_result != HTTP_OK) {
@@ -85,6 +85,8 @@ int main() {
                     }
 
                     disconnect_client(current_fd, &net_ctx);
+                    printf("httpserver: closed conncetion on socket %d\n",
+                    current_fd);
                     http_free_response(http_response);
                     break;
 

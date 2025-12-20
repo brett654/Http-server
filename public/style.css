@@ -7,3 +7,10 @@ body {
     align-items: center;
     height: 100vh;
 }
+
+.profile-pic {
+    width: 250px;
+    height: 250px;
+    object-fit: cover; /* This is the secret for JPGs! */
+    border-radius: 8px;
+}

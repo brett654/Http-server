@@ -203,7 +203,7 @@ HttpResult http_serialize(HttpResponse* http_response) {
         "Content-Length: %zu\r\n"
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
-        "Connection: close\r\n\r\n",
+        "Connection: keep-alive\r\n\r\n",
         http_response->status_code,
         http_response->status_message,
         http_response->mime_type,
