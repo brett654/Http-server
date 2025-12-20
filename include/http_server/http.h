@@ -20,6 +20,7 @@ typedef enum {
     HTTP_MALLOC_ERR,
     HTTP_FILE_READ_ERR,
     HTTP_HEADER_CREATION_ERR,
+    HTTP_FORBIDDEN,
 } HttpResult;
 
 typedef struct {

@@ -116,6 +116,10 @@ void http_status_from_result(HttpResult result, HttpResponse* http_response) {
             http_response->status_code = 400;
             strcpy(http_response->status_message, "Bad Request");
             break;
+        case HTTP_FORBIDDEN:
+            http_response->status_code = 403;
+            strcpy(http_response->status_message, "Forbidden");
+            break;
         case HTTP_MALLOC_ERR:
         case HTTP_FILE_READ_ERR:
         default:
@@ -134,6 +138,7 @@ const char* http_strerror(HttpResult http_result) {
         case HTTP_MALLOC_ERR:           return "Malloc error occured";
         case HTTP_FILE_READ_ERR:        return "Reading of file failed";
         case HTTP_HEADER_CREATION_ERR:  return "Failed to create http header";
+        case HTTP_FORBIDDEN:            return "Forbidden file path";
         default:                        return "Unknown http error";
     }
 }
@@ -149,6 +154,12 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
     char *file_to_serve = http_request.path;
     if (strcmp(file_to_serve, "/") == 0) {
         file_to_serve = "/index.html";
+    }
+
+    if (strstr(file_to_serve, "..")) {
+        // If the path contains ".." return a 403 Forbidden
+        http_result = HTTP_FORBIDDEN;
+        goto handle_error;
     }
 
     http_result = http_get_mime_type(file_to_serve, http_response);
@@ -173,6 +184,8 @@ HttpResult http_serialize(HttpResponse* http_response) {
         "HTTP/1.1 %d %s\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %ld\r\n"
+        "X-Content-Type-Options: nosniff\r\n"
+        "X-Frame-Options: DENY\r\n"
         "Connection: close\r\n\r\n",
         http_response->status_code,
         http_response->status_message,
@@ -195,6 +208,6 @@ HttpResult http_serialize(HttpResponse* http_response) {
     if (http_response->body) {
         memcpy(http_response->response_buffer + header_len, http_response->body, http_response->content_length);
     }
-    
+
     return HTTP_OK;
 }

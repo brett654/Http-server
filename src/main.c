@@ -75,15 +75,16 @@ int main() {
                         fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
                     }
 
-                    http_result = http_serialize(http_response);
-                    if (http_result != HTTP_OK) {
-                        fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
+                    if (http_serialize(http_response) == HTTP_OK) {
+                        if (send(current_fd, http_response->response_buffer, http_response->response_size, 0) == -1) {
+                            perror("send");
+                        }
+                    } else {
+                        const char* fatal = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                        send(current_fd, fatal, strlen(fatal), 0);
                     }
-                    
-                    if (send(current_fd, http_response->response_buffer, http_response->response_size, 0) == -1) {
-                        perror("send");
-                    }
-                    
+
+                    disconnect_client(current_fd, &net_ctx);
                     http_free_response(http_response);
                     break;
 
