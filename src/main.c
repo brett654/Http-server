@@ -1,5 +1,6 @@
 #include "../include/http_server/network.h"
 #include "../include/http_server/http.h"
+#include "../include/http_server/common.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +18,6 @@
 #define PORT "9034"
 #define MAXQUEUE 10
 #define MAXLiNE 4096
-#define TIMEOUT 5
 
 volatile int keep_running = 1;
 
@@ -49,20 +49,19 @@ int main() {
         net_ctx.read_fds = net_ctx.master;
 
         struct timeval timeout;
-        timeout.tv_sec = 5;
+        timeout.tv_sec = TIMEOUT;
         timeout.tv_usec = 0;
 
         select_result = select(net_ctx.fd_max + 1, &net_ctx.read_fds, NULL, NULL, &timeout);
         if (select_result == -1) {
             if (errno == EINTR) {
-            // This was just Ctrl+C! 
-            // Break the loop so we can hit the cleanup code at the bottom.
+            // just ctrl+C
             break; 
             }
             perror("select");
             exit(EXIT_FAILURE);
         } else if (select_result == 0) {
-            printf("httpserver: idle timeout(5s) - checking for expired connections\n");
+            printf("httpserver: idle timeout - checking for expired connections\n");
 
             time_t now = time(NULL);
 
@@ -98,7 +97,7 @@ int main() {
             switch(num_bytes) {
                 case -1: // Error
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        printf("httpserver: Request took too long (Client timed out after 5s)\n");
+                        printf("httpserver: Request took too long\n");
                     } else {
                         perror("recv error");
                     }

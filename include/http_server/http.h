@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
+#include "common.h"
+
 #define METHOD_LEN 9
 #define PATH_LEN 257
 #define VERSION_LEN 17

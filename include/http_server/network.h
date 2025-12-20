@@ -11,6 +11,8 @@
 #include <netinet/in.h>
 #include <time.h>
 
+#include "common.h"
+
 #define MAXQUEUE 10
 
 typedef struct {

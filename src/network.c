@@ -62,7 +62,7 @@ NetResult handle_new_connection(NetContext* net_ctx) {
     }
 
     struct timeval timeout;
-    timeout.tv_sec = 5;
+    timeout.tv_sec = TIMEOUT;
     timeout.tv_usec = 0;
 
     if (setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {

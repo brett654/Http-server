@@ -207,11 +207,12 @@ HttpResult http_serialize(HttpResponse* http_response) {
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
         "Connection: keep-alive\r\n"
-        "Keep-Alive: timeout=5, max=100\r\n\r\n",
+        "Keep-Alive: timeout=%d, max=100\r\n\r\n",
         http_response->status_code,
         http_response->status_message,
         http_response->mime_type,
-        http_response->content_length
+        http_response->content_length,
+        TIMEOUT
     );
 
     if (header_len < 0 || header_len >= sizeof(header_buf)) {
