@@ -104,6 +104,15 @@ void disconnect_client(int client_fd, NetContext* net_ctx) {
     client_fd);
 }
 
+void server_cleanup(NetContext* net_ctx) {
+    printf("\nShutting down: Cleaning up memory...\n");
+    for (int i = 0; i < FD_SETSIZE; i++) {
+        if (net_ctx->clients[i] != NULL) {
+            disconnect_client(i, net_ctx);
+        }
+    }
+}
+
 const char* net_strerror(NetResult status) {
     switch (status) {
         case NET_OK:              return "Success";

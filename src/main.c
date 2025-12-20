@@ -12,13 +12,22 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
 
 #define PORT "9034"
 #define MAXQUEUE 10
 #define MAXLiNE 4096
 #define TIMEOUT 5
 
+volatile int keep_running = 1;
+
+void handle_sigint(int sig) {
+    keep_running = 0;
+}
+
 int main() {
+    signal(SIGINT, handle_sigint);
+
     NetResult net_result;
     HttpResult http_result;
 
@@ -45,6 +54,11 @@ int main() {
 
         select_result = select(net_ctx.fd_max + 1, &net_ctx.read_fds, NULL, NULL, &timeout);
         if (select_result == -1) {
+            if (errno == EINTR) {
+            // This was just Ctrl+C! 
+            // Break the loop so we can hit the cleanup code at the bottom.
+            break; 
+            }
             perror("select");
             exit(EXIT_FAILURE);
         } else if (select_result == 0) {
@@ -84,7 +98,7 @@ int main() {
             switch(num_bytes) {
                 case -1: // Error
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        printf("LOG: Request took too long (Client timed out after 5s)\n");
+                        printf("httpserver: Request took too long (Client timed out after 5s)\n");
                     } else {
                         perror("recv error");
                     }
@@ -125,4 +139,7 @@ int main() {
             }
         }
     }
+
+    server_cleanup(&net_ctx);
+    return 0;
 }

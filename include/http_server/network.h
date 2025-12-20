@@ -42,5 +42,6 @@ NetResult handle_new_connection(NetContext* net_ctx);
 const char* net_strerror(NetResult status);
 void disconnect_client(int client_fd, NetContext* net_ctx);
 void net_init(NetContext* net_ctx);
+void server_cleanup(NetContext* net_ctx);
 
 #endif
