@@ -30,6 +30,7 @@ int main() {
     net_result = setup_listener_socket(PORT, &net_ctx);
     if (net_result != NET_OK) {
         fprintf(stderr, "ERROR: %s (%s)\n", net_strerror(net_result), strerror(errno));
+        exit(EXIT_FAILURE);
     }
 
     while (1) {
@@ -74,23 +75,16 @@ int main() {
                         fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
                     }
 
-                    printf("Parsed response:\n%s\n", http_response->mime_type);
-
-                    char *response = 
-                        "HTTP/1.1 200 OK\r\n"
-                        "Content-Type: text/html\r\n"
-                        "Content-Length: 20\r\n"
-                        "Connection: keep-alive\r\n"
-                        "\r\n"
-                        "<h1>Hello World</h1>";
+                    http_result = http_serialize(http_response);
+                    if (http_result != HTTP_OK) {
+                        fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
+                    }
                     
-                    if (send(current_fd, response, strlen(response), 0) == -1) {
+                    if (send(current_fd, http_response->response_buffer, http_response->response_size, 0) == -1) {
                         perror("send");
                     }
+                    
                     http_free_response(http_response);
-
-                    //printf("httpserver: response sent closing socket %d\n", current_fd);
-                    //disconnect_client(current_fd, &net_ctx);
                     break;
 
             }

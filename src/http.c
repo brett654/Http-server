@@ -20,6 +20,11 @@ void http_free_response(HttpResponse* http_response) {
         http_response->body = NULL;
     }
 
+    if (http_response->response_buffer != NULL) {
+        free(http_response->response_buffer);
+        http_response->response_buffer = NULL;
+    }
+
     free(http_response);
 }
 
@@ -128,6 +133,7 @@ const char* http_strerror(HttpResult http_result) {
         case HTTP_FILE_NOT_FOUND:       return "File not found";
         case HTTP_MALLOC_ERR:           return "Malloc error occured";
         case HTTP_FILE_READ_ERR:        return "Reading of file failed";
+        case HTTP_HEADER_CREATION_ERR:  return "Failed to create http header";
         default:                        return "Unknown http error";
     }
 }
@@ -145,16 +151,50 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
         file_to_serve = "/index.html";
     }
 
-    http_result = http_handle_file_request(file_to_serve, http_response);
-    if (http_result != HTTP_OK) goto handle_error;
-
     http_result = http_get_mime_type(file_to_serve, http_response);
     if (http_result != HTTP_OK) goto handle_error;
 
+    http_result = http_handle_file_request(file_to_serve, http_response);
+    if (http_result != HTTP_OK) goto handle_error;
+
+    http_status_from_result(http_result, http_response);
     return HTTP_OK;
 
 handle_error:
     // ERROR CASE: Map the internal error to the public HTTP status
     http_status_from_result(http_result, http_response);
-    return http_result;
+    return http_result; // for sys error mesg in main
+}
+
+HttpResult http_serialize(HttpResponse* http_response) {
+    char header_buf[1024];
+
+    int header_len = snprintf(header_buf, sizeof(header_buf),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %ld\r\n"
+        "Connection: close\r\n\r\n",
+        http_response->status_code,
+        http_response->status_message,
+        http_response->mime_type,
+        http_response->content_length
+    );
+
+    if (header_len < 0 || header_len >= sizeof(header_buf)) {
+        return HTTP_HEADER_CREATION_ERR; 
+    }
+
+    http_response->response_size = header_len + http_response->content_length;
+    http_response->response_buffer = malloc(http_response->response_size);
+
+    if (http_response->response_buffer == NULL) {
+        return HTTP_MALLOC_ERR;
+    }
+
+    memcpy(http_response->response_buffer, header_buf, header_len);
+    if (http_response->body) {
+        memcpy(http_response->response_buffer + header_len, http_response->body, http_response->content_length);
+    }
+    
+    return HTTP_OK;
 }
