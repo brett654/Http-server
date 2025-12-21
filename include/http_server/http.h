@@ -9,9 +9,9 @@
 
 #include "common.h"
 
-#define METHOD_LEN 9
-#define PATH_LEN 257
-#define VERSION_LEN 17
+#define METHOD_LEN 16
+#define PATH_LEN 256
+#define VERSION_LEN 16
 #define MIME_TYPE_LEN 64
 #define STATUS_MESSAGE_LEN 32
 #define MAX_FILE_LEN 4096
@@ -25,6 +25,8 @@ typedef enum {
     HTTP_FILE_READ_ERR,
     HTTP_HEADER_CREATION_ERR,
     HTTP_FORBIDDEN,
+    HTTP_VERSION_NOT_SUPPORTED,
+    HTTP_URI_TOO_LONG,
 } HttpResult;
 
 typedef struct {
@@ -49,7 +51,7 @@ typedef struct {
     const char* mime_type;
 } MimeMap;
 
-HttpResult http_handle_request(const char* buf, HttpResponse* http_response);
+HttpResult http_handle_request(char* buf, HttpResponse* http_response);
 HttpResult http_serialize(HttpResponse* http_response);
 HttpResponse* http_init_response();
 void http_free_response(HttpResponse* http_response);

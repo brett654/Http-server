@@ -28,20 +28,47 @@ void http_free_response(HttpResponse* http_response) {
     free(http_response);
 }
 
-HttpResult http_parse_request(const char* buf, HttpRequest* http_request) {
-    int scan_result = sscanf(buf,
-        "%8s %256s %16s",
-        http_request->method,
-        http_request->path,
-        http_request->version
-    );
+HttpResult http_parse_request(char* buf, HttpRequest* http_request) {
+    char *token;
+    char *string = buf;
+    int written;
 
-    if (scan_result < 3) {
-        return HTTP_PARSE_ERR;
-    }
+    // Extract Method
+    token = strsep(&string, " ");
+    if (!token) return HTTP_PARSE_ERR;
+    written = snprintf(http_request->method, sizeof(http_request->method),
+        "%s",
+        token
+    );
+    if (written >= (int)sizeof(http_request->method)) return HTTP_URI_TOO_LONG;
+
+    // Extract Path
+    token = strsep(&string, " ");
+    if (!token) return HTTP_PARSE_ERR;
+    written = snprintf(http_request->path, sizeof(http_request->path),
+        "%s",
+        token
+    );
+    if (written >= (int)sizeof(http_request->path)) return HTTP_URI_TOO_LONG;
+
+    // Extract Version
+    token = strsep(&string, "\r\n");
+    if (!token) return HTTP_PARSE_ERR;
+    written = snprintf(http_request->version, sizeof(http_request->version),
+        "%s",
+        token
+    );
+    if (written >= (int)sizeof(http_request->version)) return HTTP_URI_TOO_LONG;
+
 
     if (strncmp(http_request->method, "GET", 3) != 0) {
         return HTTP_METHOD_NOT_SUPPORTED;
+    }
+
+    if (strncmp(http_request->version, "HTTP/1.1", 8) != 0 &&
+        strncmp(http_request->version, "HTTP/1.0", 8) != 0
+    ) {
+        return HTTP_VERSION_NOT_SUPPORTED;
     }
 
     return HTTP_OK;
@@ -62,10 +89,11 @@ HttpResult http_get_mime_type(const char* file_path, HttpResponse* http_response
     };
 
     const size_t mime_types_count = sizeof(mime_types) / sizeof(MimeMap);
+    const size_t type_size = sizeof(http_response->mime_type);
 
     char* dot = strrchr(file_path, '.');
     if (!dot) {
-        strcpy(http_response->mime_type, "text/plain");
+        snprintf(http_response->mime_type, type_size, "%s", "application/octet-stream");
         return HTTP_OK;
     }
 
@@ -73,12 +101,12 @@ HttpResult http_get_mime_type(const char* file_path, HttpResponse* http_response
     
     for (int i = 0; i < mime_types_count; i++) {
         if (strcmp(ext, mime_types[i].extension) == 0) {
-            strncpy(http_response->mime_type, mime_types[i].mime_type, MIME_TYPE_LEN);
+            snprintf(http_response->mime_type, type_size, "%s", mime_types[i].mime_type);
             return HTTP_OK;
         }
     }
 
-    strncpy(http_response->mime_type, "application/octet-stream", MIME_TYPE_LEN);
+    snprintf(http_response->mime_type, type_size, "%s", "application/octet-stream");
     return HTTP_OK;
 }
 
@@ -148,19 +176,20 @@ void http_status_from_result(HttpResult result, HttpResponse* http_response) {
 
 const char* http_strerror(HttpResult http_result) {
     switch (http_result) {
-        case HTTP_OK:                   return "Success";
-        case HTTP_PARSE_ERR:            return "Failed to parse request";
-        case HTTP_METHOD_NOT_SUPPORTED: return "Http method not supported";
-        case HTTP_FILE_NOT_FOUND:       return "File not found";
-        case HTTP_MALLOC_ERR:           return "Malloc error occured";
-        case HTTP_FILE_READ_ERR:        return "Reading of file failed";
-        case HTTP_HEADER_CREATION_ERR:  return "Failed to create http header";
-        case HTTP_FORBIDDEN:            return "Forbidden file path";
-        default:                        return "Unknown http error";
+        case HTTP_OK:                    return "Success";
+        case HTTP_PARSE_ERR:             return "Failed to parse request";
+        case HTTP_METHOD_NOT_SUPPORTED:  return "Http method not supported";
+        case HTTP_FILE_NOT_FOUND:        return "File not found";
+        case HTTP_MALLOC_ERR:            return "Malloc error occured";
+        case HTTP_FILE_READ_ERR:         return "Reading of file failed";
+        case HTTP_HEADER_CREATION_ERR:   return "Failed to create http header";
+        case HTTP_FORBIDDEN:             return "Forbidden file path";
+        case HTTP_VERSION_NOT_SUPPORTED: return "Http version not supported";
+        default:                         return "Unknown http error";
     }
 }
 
-HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
+HttpResult http_handle_request(char* buf, HttpResponse* http_response) {
     HttpRequest http_request;
     HttpResult http_result;
 
@@ -190,15 +219,15 @@ HttpResult http_handle_request(const char* buf, HttpResponse* http_response) {
 
     http_status_from_result(http_result, http_response);
 
-    printf("%s %s %s -> %d %s\n", http_request.method, http_request.path, http_request.version,
-        http_response->status_code, http_response->status_message
+    printf("%s %s %s -> 200 OK\n",
+        http_request.method, http_request.path, http_request.version
     );
-
     return HTTP_OK;
 
 handle_error:
     // ERROR CASE: Map the internal error to the public HTTP status
     http_status_from_result(http_result, http_response);
+    http_response->keep_alive = false;
     return http_result; // for sys error mesg in main
 }
 
