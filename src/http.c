@@ -149,24 +149,40 @@ void http_status_from_result(HttpResult result, HttpResponse* http_response) {
             http_response->status_code = 200;
             strcpy(http_response->status_message, "OK");
             break;
-        case HTTP_FILE_NOT_FOUND:
-            http_response->status_code = 404;
-            strcpy(http_response->status_message, "Not Found");
-            break;
-        case HTTP_METHOD_NOT_SUPPORTED:
-            http_response->status_code = 405;
-            strcpy(http_response->status_message, "Method Not Allowed");
-            break;
+
         case HTTP_PARSE_ERR:
             http_response->status_code = 400;
             strcpy(http_response->status_message, "Bad Request");
             break;
+
         case HTTP_FORBIDDEN:
             http_response->status_code = 403;
             strcpy(http_response->status_message, "Forbidden");
             break;
+
+        case HTTP_FILE_NOT_FOUND:
+            http_response->status_code = 404;
+            strcpy(http_response->status_message, "Not Found");
+            break;
+
+        case HTTP_METHOD_NOT_SUPPORTED:
+            http_response->status_code = 405;
+            strcpy(http_response->status_message, "Method Not Allowed");
+            break;
+
+        case HTTP_URI_TOO_LONG:
+            http_response->status_code = 414;
+            strcpy(http_response->status_message, "URI Too Long");
+            break;
+
+        case HTTP_VERSION_NOT_SUPPORTED:
+            http_response->status_code = 505;
+            strcpy(http_response->status_message, "HTTP Version Not Supported");
+            break;
+
         case HTTP_MALLOC_ERR:
         case HTTP_FILE_READ_ERR:
+        case HTTP_HEADER_CREATION_ERR:
         default:
             http_response->status_code = 500;
             strcpy(http_response->status_message, "Internal Server Error");
@@ -218,16 +234,18 @@ HttpResult http_handle_request(char* buf, HttpResponse* http_response) {
     if (http_result != HTTP_OK) goto handle_error;
 
     http_status_from_result(http_result, http_response);
-
+/*
     printf("%s %s %s -> 200 OK\n",
         http_request.method, http_request.path, http_request.version
     );
+*/
     return HTTP_OK;
 
 handle_error:
-    // ERROR CASE: Map the internal error to the public HTTP status
     http_status_from_result(http_result, http_response);
+    snprintf(http_response->mime_type, MIME_TYPE_LEN, "%s", "text/html");
     http_response->keep_alive = false;
+
     return http_result; // for sys error mesg in main
 }
 

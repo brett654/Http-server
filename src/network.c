@@ -1,12 +1,10 @@
 #include "../include/http_server/network.h"
 
 void net_init(NetContext* net_ctx) {
-    FD_ZERO(&net_ctx->master);
-    FD_ZERO(&net_ctx->read_fds);
-    net_ctx->fd_max = 0;
     net_ctx->listener = -1;
+    net_ctx->epoll_fd = -1;
 
-    for (int i = 0; i < FD_SETSIZE; i++) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         net_ctx->clients[i] = NULL;
     }
 }
@@ -41,78 +39,93 @@ NetResult setup_listener_socket(const char* port, NetContext* net_ctx) {
         return NET_LISTEN_ERR;
     }
 
+    net_ctx->ev.events = EPOLLIN;
+    net_ctx->ev.data.fd = listener;
+    if (epoll_ctl(net_ctx->epoll_fd, EPOLL_CTL_ADD, listener, &net_ctx->ev) == -1) {
+        return NET_EPOLL_ERR;
+    }
+
     net_ctx->listener = listener;
-    FD_SET(listener, &net_ctx->master);
-    net_ctx->fd_max = listener;
     return NET_OK;
+}
+
+int setnonblocking(int sock) {
+    int result;
+    int flags;
+
+    flags = fcntl(sock, F_GETFL, 0);
+    if (flags == -1) {
+        return -1;  // error
+    }
+
+    flags |= O_NONBLOCK;
+
+    result = fcntl(sock , F_SETFL , flags);
+    return result;
 }
 
 NetResult handle_new_connection(NetContext* net_ctx) {
     struct sockaddr_in remote_addr;
     socklen_t addr_len = sizeof(remote_addr);
+    int yes = 1;
     
-    int new_fd = accept(net_ctx->listener, (struct sockaddr*)&remote_addr, &addr_len);
-    if (new_fd == -1) {
+    int conn_sock = accept(net_ctx->listener, (struct sockaddr*)&remote_addr, &addr_len);
+    if (conn_sock == -1) {
         return NET_ACCEPT_ERR;
     }
 
-    if (new_fd >= FD_SETSIZE) {
-        close(new_fd);
+    if (setsockopt(conn_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+        send(conn_sock, HTTP_500_ERR, strlen(HTTP_500_ERR), 0);
+        close(conn_sock);
+        return NET_SETSOCKOPT_ERR;
+    }
+
+    if (conn_sock >= MAX_CLIENTS) {
+        char dummy_buffer[1024];
+        recv(conn_sock, dummy_buffer, sizeof(dummy_buffer), MSG_DONTWAIT);
+        send(conn_sock, HTTP_503_FULL, strlen(HTTP_503_FULL), 0);
+        close(conn_sock);
         return NET_MAX_CLIENTS_ERR;
     }
 
-    struct timeval timeout;
-    timeout.tv_sec = TIMEOUT;
-    timeout.tv_usec = 0;
-
-    if (setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        perror("setsockopt timeout");
-    }
+    setnonblocking(conn_sock);
 
     Client* c = malloc(sizeof(Client));
-//    c->fd = new_fd;
-//    c->address = remote_addr;
-    c->last_activity = time(NULL);
-
-    if (net_ctx->clients[new_fd] != NULL) {
-        free(net_ctx->clients[new_fd]); 
+    if (!c) {
+        send(conn_sock, HTTP_500_ERR, strlen(HTTP_500_ERR), 0);
+        close(conn_sock);
+        return NET_MALLOC_ERR;
     }
-    net_ctx->clients[new_fd] = c;
+    
+    c->fd = conn_sock;
+    net_ctx->clients[conn_sock] = c;
 
-    FD_SET(new_fd, &net_ctx->master);
-    if (new_fd > net_ctx->fd_max) {
-        net_ctx->fd_max = new_fd;
-    }
-    printf("httpserver: new conncetion from %s on socket %d\n",
-        inet_ntoa(remote_addr.sin_addr), new_fd);
+    net_ctx->ev.events = EPOLLIN | EPOLLET;
+    net_ctx->ev.data.ptr = c;
+    if (epoll_ctl(net_ctx->epoll_fd, EPOLL_CTL_ADD, conn_sock, &net_ctx->ev) == -1) {
+        perror("epoll_ctl: listener");
+        return NET_ACCEPT_ERR;
+    } 
+
+
+    //printf("httpserver: new conncetion  on socket %d\n", conn_sock);
     return NET_OK;
 }
 
-void disconnect_client(int client_fd, NetContext* net_ctx) {
-    FD_CLR(client_fd, &net_ctx->master);
+void disconnect_client(Client* c) {
+    if (!c) return;
 
-    if (net_ctx->clients[client_fd] != NULL) {
-        free(net_ctx->clients[client_fd]);
-        net_ctx->clients[client_fd] = NULL;
-    }
-
-    if (client_fd == net_ctx->fd_max) {
-        // loop until finding a set bit
-        while (FD_ISSET(net_ctx->fd_max, &net_ctx->master) == 0 && net_ctx->fd_max > 0) {
-            (net_ctx->fd_max)--;
-        }
-    }
-
-    close(client_fd);
-    printf("httpserver: closed conncetion on socket %d\n\n",
-    client_fd);
+    //printf("httpserver: closed conncetion on socket %d\n", c->fd);
+    close(c->fd);
+    free(c);
 }
 
-void server_cleanup(NetContext* net_ctx) {
-    printf("\nShutting down: Cleaning up memory...\n");
-    for (int i = 0; i < FD_SETSIZE; i++) {
+void system_cleanup(NetContext* net_ctx) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         if (net_ctx->clients[i] != NULL) {
-            disconnect_client(i, net_ctx);
+            close(net_ctx->clients[i]->fd);
+            free(net_ctx->clients[i]);
+            net_ctx->clients[i] = NULL;
         }
     }
 }
@@ -126,6 +139,8 @@ const char* net_strerror(NetResult status) {
         case NET_SETSOCKOPT_ERR:  return "Failed to set socket options";
         case NET_ACCEPT_ERR:      return "Failed to accept new connection";
         case NET_MAX_CLIENTS_ERR: return "Max client(1024) reached";
+        case NET_EPOLL_ERR:       return "Failed to set up epoll for listener socket";
+        case NET_MALLOC_ERR:      return "Malloc failed";
         default:                  return "Unknown network error";
     }
 }

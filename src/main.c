@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 //#include <unistd.h>
 //#include <string.h>
 #include <sys/types.h>
@@ -15,10 +16,16 @@
 #include <time.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <sys/epoll.h>
 
 #define PORT "9034"
-#define MAXQUEUE 10
-#define MAXLiNE 4096
+
+#define COLOR_RED    "\033[0;31m"
+#define COLOR_GREEN  "\033[0;32m"
+#define COLOR_YELLOW "\033[0;33m"
+#define COLOR_BLUE   "\033[0;34m"
+#define COLOR_CYAN   "\033[0;36m"
+#define COLOR_WHITE  "\033[0;37m"
 
 volatile int keep_running = 1;
 
@@ -32,12 +39,18 @@ int main() {
     NetResult net_result;
     HttpResult http_result;
 
-    char buf[MAXLiNE];
     int num_bytes;
+    int num_fds;
     int select_result;
 
     NetContext net_ctx;
     net_init(&net_ctx);
+
+    net_ctx.epoll_fd = epoll_create1(0);
+    if (net_ctx.epoll_fd == -1) {
+        perror("epoll_create1");
+        exit(EXIT_FAILURE);
+    }
 
     net_result = setup_listener_socket(PORT, &net_ctx);
     if (net_result != NET_OK) {
@@ -45,55 +58,27 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
+
     while (1) {
-        net_ctx.read_fds = net_ctx.master;
-
-        struct timeval timeout;
-        timeout.tv_sec = TIMEOUT;
-        timeout.tv_usec = 0;
-
-        select_result = select(net_ctx.fd_max + 1, &net_ctx.read_fds, NULL, NULL, &timeout);
-        if (select_result == -1) {
-            if (errno == EINTR) {
-            // just ctrl+C
-            break; 
-            }
-            perror("select");
+        num_fds = epoll_wait(net_ctx.epoll_fd, net_ctx.events, MAX_EVENTS, -1);
+        if (num_fds == -1) {
+            perror("epoll_wait");
             exit(EXIT_FAILURE);
-        } else if (select_result == 0) {
-            printf("httpserver: idle timeout - checking for expired connections\n");
-
-            time_t now = time(NULL);
-
-            for (int i = 0; i <= net_ctx.fd_max; i++) {
-                if (i == net_ctx.listener || net_ctx.clients[i] == NULL) {
-                    continue;
-                }
-
-                if (now - net_ctx.clients[i]->last_activity >= 5) {
-                    printf("httpserver: Connection expired for socket: %d\n", i);
-                    disconnect_client(i, &net_ctx);
-                }
-            }
-
-            continue;
         }
 
-        for (int current_fd = 0; current_fd <= net_ctx.fd_max; current_fd++) {
-            if (!FD_ISSET(current_fd, &net_ctx.read_fds)) {
-                continue;
-            }
-
-            if (current_fd == net_ctx.listener) { // handle client sending request to join
+        for (int i = 0; i < num_fds; i++) {
+            if (net_ctx.events[i].data.fd == net_ctx.listener) {              
                 net_result = handle_new_connection(&net_ctx);
                 if (net_result != NET_OK) {
                     fprintf(stderr, "ERROR: %s (%s)\n", net_strerror(net_result), strerror(errno));
                 }
                 continue;
             }
-            // handle data sent from client
-            num_bytes = recv(current_fd, buf, sizeof(buf) - 1, 0);
-            //printf("Recv fd: %d\n", current_fd);
+
+            Client* c = (Client*)net_ctx.events[i].data.ptr;
+            int current_fd = c->fd;
+
+            num_bytes = recv(current_fd, c->buf, sizeof(c->buf) - 1, 0);
 
             switch(num_bytes) {
                 case -1: // Error
@@ -102,28 +87,23 @@ int main() {
                     } else {
                         perror("recv error");
                     }
-                    disconnect_client(current_fd, &net_ctx);
+                    disconnect_client(c);
                     break;
                 case 0: // Connection closed
-                    printf("httpserver: socket %d hung up\n", current_fd);
-                    disconnect_client(current_fd, &net_ctx);
+                    //printf("httpserver: socket %d hung up\n", current_fd);
+                    disconnect_client(c);
                     break;
                 default: {// Got data!
                     HttpResponse* http_response = http_init_response();
-                    Client* c = net_ctx.clients[current_fd];
+                    c->buf[num_bytes] = '\0';
 
-                    if (c) c->last_activity = time(NULL);
-                    buf[num_bytes] = '\0';
-
-                    http_result = http_handle_request(buf, http_response);
+                    http_result = http_handle_request(c->buf, http_response);
                     if (http_result != HTTP_OK) {
                         fprintf(stderr, "ERROR: %s\n", http_strerror(http_result));
                     }
-                    //printf("Handle request fd: %d\n", current_fd);
 
                     if (http_serialize(http_response) != HTTP_OK) {
-                        const char* fatal = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                        send(current_fd, fatal, strlen(fatal), 0);
+                        send(current_fd, HTTP_500_ERR, strlen(HTTP_500_ERR), 0);
                         http_response->keep_alive = false;
                     } else {
                         if (send(current_fd, http_response->response_buffer, http_response->response_size, 0) == -1) {
@@ -132,8 +112,7 @@ int main() {
                     }
 
                     if (!http_response->keep_alive) {
-                        printf("httpserver: Client requested close. Hanging up socket %d\n", current_fd);
-                        disconnect_client(current_fd, &net_ctx);
+                        disconnect_client(c);
                     }
                     http_free_response(http_response);
                     break;
@@ -141,7 +120,6 @@ int main() {
             }
         }
     }
-
-    server_cleanup(&net_ctx);
+    system_cleanup(&net_ctx);
     return 0;
 }
