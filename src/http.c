@@ -245,55 +245,60 @@ handle_error:
     http_status_from_result(http_result, http_response);
     snprintf(http_response->mime_type, MIME_TYPE_LEN, "%s", "text/html");
     http_response->keep_alive = false;
+    http_response->content_length = 0;
+    http_response->body = NULL;
 
     return http_result; // for sys error mesg in main
 }
 
 HttpResult http_serialize(HttpResponse* http_response) {
-    char header_buf[1024];
+    int conn_len = http_response->keep_alive ? 
+        snprintf(NULL, 0, "Connection: keep-alive\r\nKeep-Alive: timeout=%d, max=100\r\n", TIMEOUT) :
+        snprintf(NULL, 0, "Connection: close\r\n");
 
-    char conn_header[256];
-    if (http_response->keep_alive) {
-        snprintf(conn_header, sizeof(conn_header),
-            "Connection: keep-alive\r\n"
-            "Keep-Alive: timeout=%d, max=100\r\n",
-            TIMEOUT
-        );
-    } else {
-        snprintf(conn_header, sizeof(conn_header),
-            "Connection: close\r\n"
-        );
-    }
-
-    int header_len = snprintf(header_buf, sizeof(header_buf),
+    int header_len = snprintf(NULL, 0,
         "HTTP/1.1 %d %s\r\n"
         "Content-Type: %s\r\n"
         "Content-Length: %zu\r\n"
         "X-Content-Type-Options: nosniff\r\n"
         "X-Frame-Options: DENY\r\n"
-        "%s"
+        "%.*s" // ensures correct positions of conn str
         "\r\n",
         http_response->status_code,
         http_response->status_message,
         http_response->mime_type,
         http_response->content_length,
-        conn_header
-    );
-
-    if (header_len < 0 || header_len >= sizeof(header_buf)) {
-        return HTTP_HEADER_CREATION_ERR; 
-    }
+        0, "" // juts palce for conn str(filled by conn_len)
+    ) + conn_len;
 
     http_response->response_size = header_len + http_response->content_length;
     http_response->response_buffer = malloc(http_response->response_size);
-
     if (http_response->response_buffer == NULL) {
         return HTTP_MALLOC_ERR;
     }
 
-    memcpy(http_response->response_buffer, header_buf, header_len);
+    char* ptr = http_response->response_buffer;
+    int written = sprintf(ptr,
+            "HTTP/1.1 %d %s\r\n"
+            "Content-Type: %s\r\n"
+            "Content-Length: %zu\r\n"
+            "X-Content-Type-Options: nosniff\r\n"
+            "X-Frame-Options: DENY\r\n",
+            http_response->status_code, http_response->status_message,
+            http_response->mime_type, http_response->content_length);
+
+    ptr += written;
+
+    if (http_response->keep_alive) {
+        ptr += sprintf(ptr, "Connection: keep-alive\r\nKeep-Alive: timeout=%d, max=100\r\n", TIMEOUT);
+    } else {
+        ptr += sprintf(ptr, "Connection: close\r\n");
+    }
+    
+    ptr += sprintf(ptr, "\r\n");
+
     if (http_response->body) {
-        memcpy(http_response->response_buffer + header_len, http_response->body, http_response->content_length);
+        memcpy(ptr, http_response->body, http_response->content_length);
     }
 
     return HTTP_OK;
