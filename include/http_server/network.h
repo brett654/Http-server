@@ -44,6 +44,7 @@ typedef enum {
     NET_MAX_CLIENTS_ERR,
     NET_EPOLL_ERR,
     NET_MALLOC_ERR,
+    NET_EAGAIN,
 } NetResult;
 
 NetResult setup_listener_socket(const char* port, NetContext* net_ctx);

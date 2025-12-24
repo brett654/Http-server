@@ -20,13 +20,6 @@
 
 #define PORT "9034"
 
-#define COLOR_RED    "\033[0;31m"
-#define COLOR_GREEN  "\033[0;32m"
-#define COLOR_YELLOW "\033[0;33m"
-#define COLOR_BLUE   "\033[0;34m"
-#define COLOR_CYAN   "\033[0;36m"
-#define COLOR_WHITE  "\033[0;37m"
-
 volatile int keep_running = 1;
 
 void handle_sigint(int sig) {
@@ -90,7 +83,6 @@ int main() {
                     disconnect_client(c);
                     break;
                 case 0: // Connection closed
-                    //printf("httpserver: socket %d hung up\n", current_fd);
                     disconnect_client(c);
                     break;
                 default: {// Got data!

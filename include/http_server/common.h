@@ -4,6 +4,7 @@
 #define TIMEOUT 10
 #define MAX_CLIENTS 1024
 #define MAXLiNE 4096
+#define DEBUG
 
 static const char* HTTP_503_FULL = 
     "HTTP/1.1 503 Service Unavailable\r\n"
