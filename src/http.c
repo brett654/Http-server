@@ -234,11 +234,11 @@ HttpResult http_handle_request(char* buf, HttpResponse* http_response) {
     if (http_result != HTTP_OK) goto handle_error;
 
     http_status_from_result(http_result, http_response);
-/*
+
     printf("%s %s %s -> 200 OK\n",
         http_request.method, http_request.path, http_request.version
     );
-*/
+
     return HTTP_OK;
 
 handle_error:

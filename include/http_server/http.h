@@ -51,10 +51,18 @@ typedef struct {
     const char* mime_type;
 } MimeMap;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 HttpResult http_handle_request(char* buf, HttpResponse* http_response);
 HttpResult http_serialize(HttpResponse* http_response);
 HttpResponse* http_init_response();
 void http_free_response(HttpResponse* http_response);
 const char* http_strerror(HttpResult http_result);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
