@@ -64,14 +64,16 @@ int setnonblocking(int sock) {
     return result;
 }
 
-NetResult handle_new_connection(NetContext* net_ctx) {
+int handle_new_connection(NetContext* net_ctx) {
     struct sockaddr_in remote_addr;
     socklen_t addr_len = sizeof(remote_addr);
     
     int conn_sock = accept(net_ctx->listener, (struct sockaddr*)&remote_addr, &addr_len);
     if (conn_sock == -1) {
-        return NET_ACCEPT_ERR;
+        return -1;
     }
+
+    setnonblocking(conn_sock);
 
     if (conn_sock >= MAX_CLIENTS) {
         char dummy_buffer[1024];
@@ -81,8 +83,6 @@ NetResult handle_new_connection(NetContext* net_ctx) {
         return NET_MAX_CLIENTS_ERR;
     }
 
-    setnonblocking(conn_sock);
-
     Client* c = malloc(sizeof(Client));
     if (!c) {
         send(conn_sock, HTTP_500_ERR, strlen(HTTP_500_ERR), 0);
@@ -91,20 +91,22 @@ NetResult handle_new_connection(NetContext* net_ctx) {
     }
     
     c->fd = conn_sock;
+    c->bytes_read = 0;
+    c->bytes_sent = 0;
+    c->bytes_to_send = 0;
+    c->protocol_res = NULL;
     net_ctx->clients[conn_sock] = c;
 
     net_ctx->ev.events = EPOLLIN | EPOLLET;
     net_ctx->ev.data.ptr = c; // data is a union so no longer can use .fd
     if (epoll_ctl(net_ctx->epoll_fd, EPOLL_CTL_ADD, conn_sock, &net_ctx->ev) == -1) {
         perror("epoll_ctl: listener");
-        return NET_ACCEPT_ERR;
+        return NET_EPOLL_ERR;
     } 
 
     #ifdef DEBUG
     printf("httpserver: new conncetion  on socket %d\n", conn_sock);
     #endif
-
-    return NET_OK;
 }
 
 void disconnect_client(Client* c) {
@@ -115,6 +117,11 @@ void disconnect_client(Client* c) {
     #endif
 
     close(c->fd);
+
+    if (c->protocol_res) {
+        free(c->protocol_res);
+        c->protocol_res = NULL;
+    }
     free(c);
 }
 

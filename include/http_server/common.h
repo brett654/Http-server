@@ -6,6 +6,27 @@
 #define MAXLiNE 4096
 #define DEBUG
 
+typedef enum {
+    STATE_READ_REQUEST,   // Currently receiving bytes
+    STATE_PROCESS,        // Bytes received, generating response
+    STATE_WRITE_RESPONSE, // Sending bytes back to client
+    STATE_CLOSE           // Marking for cleanup
+} ClientState;
+
+typedef struct {
+    int fd;
+//    struct sockaddr_in address;
+//    time_t last_activity;
+    char buf[MAXLiNE];
+    int bytes_read;
+    int bytes_to_send;
+    int bytes_sent;
+    ClientState state;
+
+    void* protocol_res;
+//    void (*free_protocol_data)(void*); // function pointer to cleanup
+} Client;
+
 static const char* HTTP_503_FULL = 
     "HTTP/1.1 503 Service Unavailable\r\n"
     "Content-Type: text/plain\r\n"

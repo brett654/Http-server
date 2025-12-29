@@ -20,13 +20,6 @@
 #define MAX_EVENTS 100
 
 typedef struct {
-    int fd;
-//    struct sockaddr_in address;
-//    time_t last_activity;
-    char buf[MAXLiNE];
-} Client;
-
-typedef struct {
     int listener; // listening socket descriptor
     int epoll_fd;
     Client* clients[MAX_CLIENTS];
@@ -48,7 +41,7 @@ typedef enum {
 } NetResult;
 
 NetResult setup_listener_socket(const char* port, NetContext* net_ctx);
-NetResult handle_new_connection(NetContext* net_ctx);
+int handle_new_connection(NetContext* net_ctx);
 const char* net_strerror(NetResult status);
 void disconnect_client(Client* c);
 void net_init(NetContext* net_ctx);
