@@ -36,14 +36,14 @@ typedef struct {
 } HttpRequest;
 
 typedef struct {
-    int status_code;
-    char status_message[STATUS_MESSAGE_LEN];
-    bool keep_alive;
-    char mime_type[MIME_TYPE_LEN];
-    size_t content_length;
-    char* body;
-    size_t response_size;
+char* body;
     char* response_buffer;
+    size_t content_length;
+    size_t response_size;
+    int status_code;
+    bool keep_alive;
+    char status_message[STATUS_MESSAGE_LEN];
+    char mime_type[MIME_TYPE_LEN];
 } HttpResponse;
 
 typedef struct {

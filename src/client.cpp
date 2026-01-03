@@ -9,7 +9,7 @@ Client::Client(int client_fd, int epoll_fd)
       state(ClientState::READ_REQUEST),
       response(nullptr, http_free_response) {
     struct epoll_event ev{};
-    ev.events = EPOLLIN | EPOLLOUT | EPOLLET | EPOLLRDHUP;
+    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     ev.data.ptr = this;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1) {
         throw std::system_error(errno, std::system_category(), "epoll ctl add");
@@ -103,7 +103,11 @@ void Client::handle_write_state() {
 }
 
 void Client::process_events(uint32_t events) {
-    if (events & EPOLLIN && state == ClientState::READ_REQUEST) {
+    if (events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) {
+        state = ClientState::CLOSE;
+        return;
+    }
+    if (state == ClientState::READ_REQUEST) {
         handle_read_state();
         //std::cout << "request read on socket" << client_fd << std::endl;
     }

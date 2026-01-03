@@ -7,6 +7,7 @@
 #include <memory>
 #include <iostream>
 #include <unordered_map>
+#include <print>
 
 #define PORT "9034"
 #define MAX_EVENTS 100
@@ -49,14 +50,14 @@ int main() {
             }
 
             Client* c = static_cast<Client*>(events[i].data.ptr);
+            int client_fd = c->get_client_fd();
 
             c->process_events(events[i].events);
 
             if (c->get_state() == ClientState::CLOSE) {
-                int client_fd = c->get_client_fd();
                 clients.erase(client_fd);
                 c = nullptr;
-                std::cout << "Connection closed on socket " << client_fd << std::endl;
+                std::printf("Connection closed on socket %d\n", client_fd);
             }
         }
     }

@@ -70,12 +70,11 @@ std::unique_ptr<Client> Listener::handle_new_connection() {
         
         throw std::system_error(errno, std::system_category(), "accept");
     }
-    /*
+
     if (setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) < 0) {
         throw std::system_error(errno, std::system_category(), "setsockopt");
         return nullptr;
     }
-    */
 
     if (client_fd >= MAX_CLIENTS) {
         send(client_fd, HTTP_503_FULL.data(), HTTP_503_FULL.length(), 0);
