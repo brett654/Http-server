@@ -20,7 +20,7 @@ enum class ClientState {
 };
 
 class Client {
-private:
+public:
     int client_fd;
     int epoll_fd;
     int bytes_read;
@@ -32,7 +32,7 @@ private:
     std::unique_ptr<HttpResponse, decltype(&http_free_response)> response;
 
     std::array<char, 4096> buf;
-public:
+
     Client(int client_fd, int epoll_fd);
     ~Client();
     void reset();
@@ -42,9 +42,6 @@ public:
     void handle_write_state();
 
     void process_events(uint32_t events);
-
-    int get_client_fd();
-    ClientState get_state();
 };
 
 #endif

@@ -36,7 +36,7 @@ typedef struct {
 } HttpRequest;
 
 typedef struct {
-char* body;
+    char* body;
     char* response_buffer;
     size_t content_length;
     size_t response_size;

@@ -43,18 +43,18 @@ int main() {
             if (events[i].data.ptr == &listener) {
                 std::unique_ptr<Client> new_client = listener.handle_new_connection();
                 if (new_client) {
-                    int new_fd = new_client->get_client_fd();
+                    int new_fd = new_client->client_fd;
                     clients[new_fd] = std::move(new_client);
                 }
                 continue;
             }
 
             Client* c = static_cast<Client*>(events[i].data.ptr);
-            int client_fd = c->get_client_fd();
+            int client_fd = c->client_fd;
 
             c->process_events(events[i].events);
 
-            if (c->get_state() == ClientState::CLOSE) {
+            if (c->state == ClientState::CLOSE) {
                 clients.erase(client_fd);
                 c = nullptr;
                 std::printf("Connection closed on socket %d\n", client_fd);

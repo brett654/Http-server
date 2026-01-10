@@ -122,11 +122,3 @@ void Client::process_events(uint32_t events) {
         //std::cout << "request written on socket " << client_fd << std::endl;
     }
 }
-
-int Client::get_client_fd() {
-    return client_fd;
-}
-
-ClientState Client::get_state() {
-    return state;
-}
