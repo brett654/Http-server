@@ -4,6 +4,12 @@
 #include <string_view>
 #include <vector>
 #include <expected>
+#include <array>
+#include <charconv>
+
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 enum class HttpError {
     PARSE_ERR,
@@ -15,21 +21,28 @@ enum class HttpError {
     FORBIDDEN,
     VERSION_NOT_SUPPORTED,
     URI_TOO_LONG,
-    MALFORMED_REQUEST    
+    MALFORMED_REQUEST  ,
+    MIME_TYPE_NOT_FOUND,
+    INVALID_FILE_PATH,
 };
 
-enum class HttpResult {
-    HTTP_OK = 0,
-    HTTP_PARSE_ERR,
-    HTTP_METHOD_NOT_SUPPORTED,
-    HTTP_FILE_NOT_FOUND,
-    HTTP_MALLOC_ERR,
-    HTTP_FILE_READ_ERR,
-    HTTP_HEADER_CREATION_ERR,
-    HTTP_FORBIDDEN,
-    HTTP_VERSION_NOT_SUPPORTED,
-    HTTP_URI_TOO_LONG,    
+struct MimeEntry {
+    std::string_view extension;
+    std::string_view mime_type;
 };
+
+inline constexpr auto MIME_TYPES = std::to_array<MimeEntry>({
+    {"css",  "text/css"},
+    {"gif",  "image/gif"},
+    {"htm",  "text/html"},
+    {"html", "text/html"},
+    {"jpeg", "image/jpeg"},
+    {"jpg",  "image/jpeg"},
+    {"js",   "application/javascript"},
+    {"json", "application/json"},
+    {"png",  "image/png"},
+    {"txt",  "text/plain"}
+});
 
 class Http {
 public:
@@ -43,18 +56,22 @@ public:
 
     struct Response {
         std::string_view mime_type{"text/plain"};
-        std::string_view body;
+        std::string_view status_message;
 
         std::vector<char> header_buf;
 
+        int file_fd{-1};
+        size_t file_size{0};
         int status_code{200};
         bool keep_alive{true};
 
         void clear() {
             header_buf.clear();
-            body = {};
+            status_message = {};
             status_code = 200;
             keep_alive = true;
+            file_fd = -1;
+            file_size = 0;
         }
     } response;
 
@@ -62,7 +79,12 @@ public:
     ~Http();
 
     std::expected<void, HttpError> parse(std::string_view buf);
-    std::expected<void, HttpError> mime_type();
+    std::expected<void, HttpError> set_mime_type();
+    std::expected<void, HttpError> set_file_meta();
+    std::expected<void, HttpError> serialize_header();
+    std::expected<void, HttpError> process_request(std::string_view buf);
+
+    void set_error_status(HttpError err);
 };
 
 #endif

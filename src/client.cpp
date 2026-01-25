@@ -37,7 +37,7 @@ void Client::handle_read_state() {
     int num_bytes = recv(client_fd, buf.data() + bytes_read, buf.size() - bytes_read - 1, 0);
     if (num_bytes < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return;
-        std::cerr << "recv" << ": " << strerror(errno) << std::endl;
+        std::println(std::cerr, "recv: {}", std::strerror(errno));
         state = ClientState::CLOSE;
         return;
     }
@@ -64,12 +64,12 @@ void Client::handle_process_state() {
 
     http_result = http_handle_request(buf.data(), response.get());
     if (http_result != HTTP_OK) {
-       std::cerr << "request handler" << ": " << http_strerror(http_result) << std::endl;
+       std::println(std::cerr, "request handler: {}", http_strerror(http_result));
     }
 
     http_result = http_serialize(response.get());
     if (http_result != HTTP_OK) {
-        std::cerr << "serializer" << ": " << http_strerror(http_result) << std::endl;
+        std::println(std::cerr, "serializer: {}", http_strerror(http_result));
         send(client_fd, HTTP_500_ERR, strlen(HTTP_500_ERR), 0);
         state = ClientState::CLOSE;
         return;

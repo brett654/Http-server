@@ -57,7 +57,7 @@ int main() {
             if (c->state == ClientState::CLOSE) {
                 clients.erase(client_fd);
                 c = nullptr;
-                std::printf("Connection closed on socket %d\n", client_fd);
+                std::println("Connection closed on socket {}", client_fd);
             }
         }
     }

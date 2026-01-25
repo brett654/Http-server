@@ -10,7 +10,7 @@
 #include <sys/socket.h>
 #include <system_error>
 #include <iostream>
-#include <string.h>
+#include <cstring> // for strerr
 
 enum class ClientState {
     READ_REQUEST,   // Currently receiving bytes
